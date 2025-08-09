@@ -1,0 +1,32 @@
+# Ambiente virtual Python
+.venv/
+venv/
+ENV/
+env/
+
+# Cache e arquivos temporários
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.tmp
+*.log
+
+# Modelos treinados e dados sensíveis
+models/*.joblib
+*.csv
+*.xlsx
+
+# Configurações locais
+*.env
+
+# Arquivos do VSCode
+.vscode/
+
+# Node (React frontend)
+frontend/node_modules/
+frontend/dist/
+
+# Sistema
+.DS_Store
+Thumbs.db
