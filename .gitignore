@@ -1,32 +1,40 @@
-# Ambiente virtual Python
-.venv/
-venv/
-ENV/
-env/
-
-# Cache e arquivos temporários
+# --- Backend
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.tmp
+*.db
+*.sqlite3
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# Modelos treinados
+models/*.joblib
+models/*.pkl
+models/*.h5
+
 *.log
 
-# Modelos treinados e dados sensíveis
-models/*.joblib
-*.csv
-*.xlsx
-
-# Configurações locais
-*.env
-
-# Arquivos do VSCode
-.vscode/
-
-# Node (React frontend)
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/.parcel-cache/
+frontend/.next/
 
-# Sistema
+# Lock files
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+.vscode/
+.history/
+
+
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Icon?
