@@ -1,23 +1,37 @@
-# --- Backend
+# --- Global OS junk ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+
+# --- Editor/IDE ---
+.vscode/
+.history/
+
+# --- Python backend ---
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.db
+*.sqlite
 *.sqlite3
+*.log
 
-# Virtual env
+# Virtual envs
 .venv/
-env/
 venv/
+env/
 
-# Modelos treinados
+# Model artifacts (mantém a pasta, ignora arquivos)
 models/*.joblib
 models/*.pkl
 models/*.h5
+models/*.bin
+models/*.pt
+models/*.onnx
 
-*.log
-
+# --- Node/Frontend (React + Vite + Tailwind) ---
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
@@ -25,16 +39,12 @@ frontend/.cache/
 frontend/.parcel-cache/
 frontend/.next/
 
-# Lock files
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
+Lockfiles (descomente se NÃO quiser versionar)
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
 
-.vscode/
-.history/
-
-
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Icon?
+frontend/.env
+frontend/.env.*.local
+.env
+.env.*.local

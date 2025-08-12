@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.card { @apply bg-white/80 backdrop-blur rounded-2xl shadow border border-slate-200; }
+.btn  { @apply px-4 py-2 rounded-xl text-white font-medium bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400; }
+.input { @apply w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400; }
+.label { @apply text-sm text-slate-600; }
+.tag { @apply px-2 py-0.5 rounded-full text-xs font-medium; }
+.tag-pos { @apply bg-emerald-100 text-emerald-700; }
+.tag-neu { @apply bg-sky-100 text-sky-700; }
+.tag-neg { @apply bg-rose-100 text-rose-700; }
