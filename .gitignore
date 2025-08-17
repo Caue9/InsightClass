@@ -40,9 +40,6 @@ frontend/.parcel-cache/
 frontend/.next/
 
 Lockfiles (descomente se NÃO quiser versionar)
-frontend/package-lock.json
-frontend/yarn.lock
-frontend/pnpm-lock.yaml
 
 frontend/.env
 frontend/.env.*.local

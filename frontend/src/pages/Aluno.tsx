@@ -1,171 +1,265 @@
 // src/pages/Aluno.tsx
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { enviarFeedback, type Target } from '../lib/api';
-import { listSubjects, teacherOptionsForSubject } from '../lib/mockStore';
-import type { Subject } from '../lib/types';
-
-type TeacherOpt = { id: string; name: string };
+import Header from '../components/Header';
+import { listTeachers, addFeedback, listFeedbacks, listStudents } from '../lib/mockStore';
+import type { Teacher, Feedback, FeedbackLabel } from '../lib/types';
 
 export default function Aluno() {
   const { session, logout } = useAuth();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [teachers, setTeachers] = useState<TeacherOpt[]>([]);
-
-  const [form, setForm] = useState<{
-    texto: string;
-    target_type: Target;
-    course_code: string;  // subject code
-    teacher_id: string;
-  }>({
-    texto: '',
-    target_type: 'professor',
-    course_code: '',
-    teacher_id: '',
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [feedbacksAboutMe, setFeedbacksAboutMe] = useState<Feedback[]>([]);
+  const [mySentFeedbacks, setMySentFeedbacks] = useState<Feedback[]>([]);
+  const [feedbackForm, setFeedbackForm] = useState({
+    teacherId: '',
+    text: '',
+    isAnonymous: false,
+    label: '' as FeedbackLabel,
   });
-  const [status, setStatus] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState('');
+  const [activeTab, setActiveTab] = useState<'enviar' | 'recebidos' | 'enviados'>('enviar');
 
-  // carrega matérias
-  useEffect(() => {
-    listSubjects().then(setSubjects);
-  }, []);
+  // currentStudentId agora vem diretamente da sessão (AuthContext)
+  const currentStudentId = session?.id;
 
-  // quando muda a matéria, recarrega os professores
   useEffect(() => {
-    (async () => {
-      const list = await teacherOptionsForSubject(form.course_code);
-      setTeachers(list.map(t => ({ id: t.id, name: t.name })));
-      // se o teacher atual não dá match com a matéria, limpa
-      if (form.teacher_id && !list.some(t => t.id === form.teacher_id)) {
-        setForm(prev => ({ ...prev, teacher_id: '' }));
+    async function loadData() {
+      try {
+        setTeachers(await listTeachers());
+
+        // A propriedade `session.id` agora deve estar disponível após o login
+        if (session?.role === 'aluno' && session.id) {
+          // Feedbacks recebidos (sobre este aluno)
+          setFeedbacksAboutMe(await listFeedbacks({ target_id: session.id, target_type: 'aluno' }));
+          // Feedbacks enviados por este aluno
+          setMySentFeedbacks(await listFeedbacks({ author_id: session.id, author_role: 'aluno' }));
+        }
+
+      } catch (error) {
+        console.error("Erro ao carregar dados na página do aluno:", error);
+        setFeedbackStatus("Erro ao carregar dados.");
       }
-    })();
-  }, [form.course_code]);
-
-  const canSubmit = useMemo(
-    () => form.texto.trim().length > 0 && !!form.course_code && !!form.teacher_id,
-    [form]
-  );
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setStatus('Enviando…');
-    try {
-      const role = session?.role ?? 'aluno';
-      await enviarFeedback({
-        texto: form.texto,
-        author_role: role,
-        target_type: 'professor',
-        course_code: form.course_code,
-        teacher_id: form.teacher_id,
-      });
-      setStatus('Enviado!');
-      setForm(prev => ({ ...prev, texto: '' }));
-    } catch {
-      setStatus('Erro ao enviar. Verifique a API.');
     }
-  }
+    loadData();
+  }, [session, activeTab]); // Recarrega dados ao mudar de aba ou sessão
+
+  const handleSendFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFeedbackStatus('Enviando feedback...');
+    if (!currentStudentId) { // Usa a variável local já validada
+        setFeedbackStatus('Erro: ID do aluno não disponível na sessão. Por favor, faça login novamente.');
+        return;
+    }
+    if (!feedbackForm.teacherId || !feedbackForm.text) {
+        setFeedbackStatus('Por favor, selecione um professor e escreva seu feedback.');
+        return;
+    }
+
+    try {
+      const selectedTeacher = teachers.find(t => t.id === feedbackForm.teacherId);
+
+      await addFeedback({
+        author_id: currentStudentId, // Usa a variável local já validada
+        author_role: 'aluno',
+        text: feedbackForm.text,
+        target_type: 'professor',
+        target_id: feedbackForm.teacherId,
+        target_name: selectedTeacher?.name,
+        is_anonymous: feedbackForm.isAnonymous,
+        label: feedbackForm.label || 'neutro',
+      });
+      setFeedbackStatus('Feedback enviado com sucesso!');
+      setFeedbackForm({ teacherId: '', text: '', isAnonymous: false, label: '' as FeedbackLabel });
+      // Recarrega os feedbacks enviados após o envio
+      setMySentFeedbacks(await listFeedbacks({ author_id: currentStudentId, author_role: 'aluno' }));
+    } catch (error: any) {
+      setFeedbackStatus(`Erro ao enviar feedback: ${error.message}`);
+      console.error(error);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 text-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Header current="aluno" onLogout={logout} />
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <div className="bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Enviar Feedback</h2>
-
-          <form className="grid gap-4" onSubmit={onSubmit}>
-            <div>
-              <label className="text-sm text-slate-600">Sobre qual matéria?</label>
-              <select
-                className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
-                value={form.course_code}
-                onChange={(e) => setForm({ ...form, course_code: e.target.value })}
-                required
-              >
-                <option value="">Selecione…</option>
-                {subjects.map(s => <option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-slate-600">Sobre qual professor?</label>
-              <select
-                className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
-                value={form.teacher_id}
-                onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}
-                required
-              >
-                <option value="">Selecione…</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-sm text-slate-600">Seu feedback</label>
-              <textarea
-                className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400 min-h-[120px]"
-                placeholder="Conte como foi a aula…"
-                value={form.texto}
-                onChange={(e) => setForm({ ...form, texto: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button className="px-4 py-2 rounded-xl text-white font-medium bg-slate-900 hover:bg-slate-800" disabled={!canSubmit}>
-                Enviar
-              </button>
-              {status && <span className="text-sm text-slate-600">{status}</span>}
-            </div>
-          </form>
+      <main className="max-w-5xl mx-auto px-4 py-8 grid gap-6">
+        <div className="bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow p-6 flex justify-between items-center">
+          <h2 className="text-xl font-semibold text-slate-900">
+            Bem-vindo, {session?.username || 'Aluno'}! 👋
+          </h2>
+          <nav className="flex gap-1">
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium ${activeTab === 'enviar' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => setActiveTab('enviar')}
+            >
+              Enviar Feedback
+            </button>
+            <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium ${activeTab === 'recebidos' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => setActiveTab('recebidos')}
+            >
+              Meus Recebidos
+            </button>
+             <button
+              className={`px-3 py-2 rounded-xl text-sm font-medium ${activeTab === 'enviados' ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              onClick={() => setActiveTab('enviados')}
+            >
+              Meus Enviados
+            </button>
+          </nav>
         </div>
+
+        {activeTab === 'enviar' && (
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold mb-3">Enviar Feedback para um Professor</h3>
+            <form onSubmit={handleSendFeedback} className="grid gap-4">
+              <div>
+                <label className="label">Professor:</label>
+                <select
+                  className="input"
+                  value={feedbackForm.teacherId}
+                  onChange={e => setFeedbackForm({ ...feedbackForm, teacherId: e.target.value })}
+                  required
+                >
+                  <option value="">Selecione um professor</option>
+                  {teachers.map(teacher => (
+                    <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">Seu Feedback:</label>
+                <textarea
+                  className="input h-24"
+                  value={feedbackForm.text}
+                  onChange={e => setFeedbackForm({ ...feedbackForm, text: e.target.value })}
+                  placeholder="Escreva seu feedback aqui..."
+                  required
+                ></textarea>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="anonymousFeedback"
+                  checked={feedbackForm.isAnonymous}
+                  onChange={e => setFeedbackForm({ ...feedbackForm, isAnonymous: e.target.checked })}
+                  className="form-checkbox h-4 w-4 text-slate-600 transition duration-150 ease-in-out"
+                />
+                <label htmlFor="anonymousFeedback" className="text-sm text-slate-700">Enviar como Anônimo</label>
+              </div>
+              <div>
+                <label className="label">Classificação:</label>
+                <div className="flex gap-4 mt-2">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      className="form-radio text-green-500"
+                      name="feedbackLabel"
+                      value="positivo"
+                      checked={feedbackForm.label === 'positivo'}
+                      onChange={e => setFeedbackForm({ ...feedbackForm, label: e.target.value as FeedbackLabel })}
+                    />
+                    <span className="ml-2 text-green-700">Positivo 😊</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      className="form-radio text-yellow-500"
+                      name="feedbackLabel"
+                      value="neutro"
+                      checked={feedbackForm.label === 'neutro'}
+                      onChange={e => setFeedbackForm({ ...feedbackForm, label: e.target.value as FeedbackLabel })}
+                    />
+                    <span className="ml-2 text-yellow-700">Neutro 😐</span>
+                  </label>
+                  <label className="inline-flex items-center">
+                    <input
+                      type="radio"
+                      className="form-radio text-red-500"
+                      name="feedbackLabel"
+                      value="negativo"
+                      checked={feedbackForm.label === 'negativo'}
+                      onChange={e => setFeedbackForm({ ...feedbackForm, label: e.target.value as FeedbackLabel })}
+                    />
+                    <span className="ml-2 text-red-700">Negativo 😠</span>
+                  </label>
+                </div>
+              </div>
+              <button type="submit" className="btn w-full">Enviar Feedback</button>
+            </form>
+            {feedbackStatus && <p className="text-sm mt-2 text-slate-600">{feedbackStatus}</p>}
+          </div>
+        )}
+
+        {activeTab === 'recebidos' && (
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold mb-3">Feedbacks Sobre Mim</h3>
+            {feedbacksAboutMe.length === 0 ? (
+              <p className="text-sm text-slate-600">Nenhum feedback recebido ainda.</p>
+            ) : (
+              <div className="grid gap-4">
+                {feedbacksAboutMe.map(f => (
+                  <FeedbackCard key={f.id} feedback={f} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'enviados' && (
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold mb-3">Meus Feedbacks Enviados</h3>
+            {mySentFeedbacks.length === 0 ? (
+              <p className="text-sm text-slate-600">Você não enviou nenhum feedback ainda.</p>
+            ) : (
+              <div className="grid gap-4">
+                {mySentFeedbacks.map(f => (
+                  <FeedbackCard key={f.id} feedback={f} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
 }
 
-function Header({
-  current,
-  onLogout,
-}: {
-  current: 'aluno' | 'professor' | 'gestor';
-  onLogout: () => void;
-}) {
-  return (
-    <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
-      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-slate-900 text-white grid place-items-center text-sm font-bold">
-            IC
-          </div>
-          <h1 className="font-semibold">InsightClass</h1>
-        </div>
-        <nav className="flex gap-1">
-          <Tab to="/aluno" label="Aluno" active={current === 'aluno'} />
-          <Tab to="/professor" label="Professor" active={current === 'professor'} />
-          <Tab to="/gestor" label="Gestor" active={current === 'gestor'} />
-          <button
-            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-100"
-            onClick={onLogout}
-          >
-            Sair
-          </button>
-        </nav>
-      </div>
-    </header>
-  );
-}
+// Componente auxiliar para exibir um feedback
+function FeedbackCard({ feedback }: { feedback: Feedback }) {
+  const getLabelColor = (label?: FeedbackLabel) => {
+    switch (label) {
+      case 'positivo': return 'text-green-700 bg-green-50';
+      case 'neutro': return 'text-yellow-700 bg-yellow-50';
+      case 'negativo': return 'text-red-700 bg-red-50';
+      default: return 'text-slate-700 bg-slate-50';
+    }
+  };
 
-function Tab({ to, label, active }: { to: string; label: string; active?: boolean }) {
+  const getTargetText = (f: Feedback) => {
+    switch (f.target_type) {
+      case 'professor': return `Para Professor: ${f.target_name || 'Desconhecido'}`;
+      case 'aluno': return `Para Aluno: ${f.target_name || 'Desconhecido'}`;
+      case 'turma': return `Para Turma: ${f.target_name || 'Desconhecido'}`;
+      case 'materia': return `Para Matéria: ${f.target_name || 'Desconhecido'}`;
+      case 'coordenacao': return 'Para Coordenação';
+      default: return '';
+    }
+  }
+
   return (
-    <Link
-      to={to}
-      className={`px-3 py-2 rounded-xl text-sm font-medium transition ${
-        active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-      }`}
-    >
-      {label}
-    </Link>
+    <div className={`p-4 border rounded-lg shadow-sm ${getLabelColor(feedback.label)}`}>
+      <div className="flex justify-between items-center mb-2">
+        <span className="font-semibold text-slate-800">
+          {feedback.is_anonymous ? 'Anônimo' : `De ${feedback.author_role === 'aluno' ? 'Aluno' : feedback.author_role === 'professor' ? 'Professor' : 'Gestor'}`}
+        </span>
+        <span className="text-xs text-slate-500">
+          {new Date(feedback.submitted_at).toLocaleDateString()}
+        </span>
+      </div>
+      <p className="text-slate-800 text-sm mb-2">{feedback.text}</p>
+      <div className="text-xs text-slate-600 italic">
+        {getTargetText(feedback)}
+      </div>
+    </div>
   );
 }

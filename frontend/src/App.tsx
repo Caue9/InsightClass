@@ -1,7 +1,7 @@
 // src/App.tsx
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import Protected from './components/Protected'
+import { Protected } from './components/Protected' // <-- CORREÇÃO AQUI!
 import Login from './pages/Login'
 import Aluno from './pages/Aluno'
 import Professor from './pages/Professor'

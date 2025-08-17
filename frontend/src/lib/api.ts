@@ -11,6 +11,7 @@ export type FeedbackItem = {
   target_type: Target;          // para feedbacks do aluno é 'professor' normalmente
   course_code?: string;         // código da matéria
   teacher_id?: string;          // professor selecionado
+  is_anonymous?: boolean;       // ADICIONADO AQUI CONFORME SOLICITADO
   label?: SentLabel;
   submitted_at?: string;
 };

@@ -4,21 +4,34 @@ import { useAuth, Role } from '../context/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
-  const nav = useNavigate();
-  const [form, setForm] = useState({ username: '', password: '', role: '' as Role | '' });
-  const [status, setStatus] = useState('');
+  const navigate = useNavigate(); // Renomeado 'nav' para 'navigate' por convenção
+  const [formData, setFormData] = useState({ username: '', password: '', role: '' as Role | '' });
+  const [statusMessage, setStatusMessage] = useState(''); // Renomeado 'status' para 'statusMessage'
+  const [isLoading, setIsLoading] = useState(false); // Adicionado estado de carregamento
 
-  async function onSubmit(e: React.FormEvent) {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus('Autenticando…');
+    setIsLoading(true);
+    setStatusMessage('Autenticando...');
+
     try {
-      if (!form.role) throw new Error('Escolha a função');
-      await login(form.username, form.password, form.role);
-      nav(`/${form.role}`);
-    } catch (e: any) {
-      setStatus(e?.message || 'Falha no login');
+      if (!formData.role) {
+        throw new Error('Por favor, selecione sua função.');
+      }
+      await login(formData.username, formData.password, formData.role);
+      navigate(`/${formData.role}`); // Redireciona para a rota da função
+    } catch (error: any) {
+      // Mensagem de erro mais amigável
+      setStatusMessage(error.message || 'Falha no login. Verifique suas credenciais.');
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen grid place-items-center bg-gradient-to-br from-slate-50 to-slate-100">
@@ -31,30 +44,60 @@ export default function Login() {
           </div>
         </div>
         <h2 className="text-lg font-semibold mb-3">Entrar</h2>
-        <form className="grid gap-3" onSubmit={onSubmit}>
+        <form className="grid gap-3" onSubmit={handleSubmit}>
           <div>
-            <label className="text-sm text-slate-600">Usuário</label>
-            <input className="input" placeholder="seu.email@exemplo.com"
-              value={form.username} onChange={e=>setForm({...form, username:e.target.value})} required />
+            <label htmlFor="username" className="text-sm text-slate-600">Usuário</label>
+            <input
+              id="username"
+              name="username"
+              className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
+              placeholder="seu.email@exemplo.com"
+              value={formData.username}
+              onChange={handleInputChange}
+              required
+              disabled={isLoading}
+            />
           </div>
           <div>
-            <label className="text-sm text-slate-600">Senha</label>
-            <input className="input" type="password" placeholder="••••••••"
-              value={form.password} onChange={e=>setForm({...form, password:e.target.value})} required />
+            <label htmlFor="password" className="text-sm text-slate-600">Senha</label>
+            <input
+              id="password"
+              name="password"
+              className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
+              type="password"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handleInputChange}
+              required
+              disabled={isLoading}
+            />
           </div>
           <div>
-            <label className="text-sm text-slate-600">Função</label>
-            <select className="input" value={form.role}
-              onChange={e=>setForm({...form, role: e.target.value as Role})} required>
-              <option value="">Selecione…</option>
+            <label htmlFor="role" className="text-sm text-slate-600">Função</label>
+            <select
+              id="role"
+              name="role"
+              className="w-full px-3 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
+              value={formData.role}
+              onChange={handleInputChange}
+              required
+              disabled={isLoading}
+            >
+              <option value="">Selecione...</option>
               <option value="aluno">Aluno</option>
               <option value="professor">Professor</option>
               <option value="gestor">Gestor</option>
             </select>
           </div>
           <div className="flex items-center gap-3">
-            <button className="btn">Entrar</button>
-            {status && <span className="text-sm text-slate-600">{status}</span>}
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl text-white font-medium bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Entrando...' : 'Entrar'}
+            </button>
+            {statusMessage && <span className="text-sm text-slate-600">{statusMessage}</span>}
           </div>
         </form>
       </div>
