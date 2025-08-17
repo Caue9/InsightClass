@@ -1,86 +1,80 @@
-import re
+# train.py
+
 import argparse
 import joblib
 import pandas as pd
 from collections import Counter
-from sklearn.svm import LinearSVC
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from utils_text import build_context_text
+
 
 REQUIRED_COLS = {"texto", "label", "author_role", "target_type"}
-OPTIONAL_COLS = {"course_code"}
-
-def clean(txt: str) -> str:
-    """Limpa html e espaços. Mantém acentos e gírias."""
-    if not isinstance(txt, str):
-        return ""
-    txt = re.sub(r"<[^>]+>", " ", txt)      # remove HTML
-    txt = re.sub(r"\s+", " ", txt).strip()  # normaliza espaços
-    return txt
-
-def make_context_row(row) -> str:
-    """Concatena contexto no início do texto: [ROLE=aluno] [TARGET=professor] [COURSE=MAT-101] ..."""
-    role = str(row.get("author_role", "") or "").strip().lower()
-    tgt  = str(row.get("target_type", "") or "").strip().lower()
-    course = str(row.get("course_code", "") or "").strip()
-    parts = [f"[ROLE={role}]", f"[TARGET={tgt}]"]
-    if course:
-        parts.append(f"[COURSE={course}]")
-    return " ".join(parts + [clean(row["texto"])]).strip()
+RANDOM_STATE = 42
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default="/home/caue/Projeto/data/rotulados_ensino_medio.csv", help="Caminho do CSV rotulado")
+    ap.add_argument("--csv", default="data/rotulados_ensino_medio.csv", help="Caminho do CSV rotulado")
     ap.add_argument("--out", default="models/sentiment.joblib", help="Arquivo de saída do modelo")
     args = ap.parse_args()
 
-    # 1) Carrega
     df = pd.read_csv(args.csv)
     if not REQUIRED_COLS.issubset(df.columns):
         raise ValueError(f"CSV precisa conter as colunas: {REQUIRED_COLS}. Encontradas: {set(df.columns)}")
 
-    # 2) Cria texto com contexto
-    df["texto_ctx"] = df.apply(make_context_row, axis=1)
+    df["texto_ctx"] = df.apply(
+        lambda row: build_context_text(
+            texto=row["texto"],
+            author_role=row.get("author_role"),
+            target_type=row.get("target_type"),
+            course_code=row.get("course_code")
+        ),
+        axis=1
+    )
 
-    # (Opcional) sanity check de distribuição
     dist = Counter(df["label"])
     print("Distribuição de labels:", dict(dist))
 
-    # 3) Split
     X = df["texto_ctx"]
     y = df["label"].astype(str)
 
     Xtr, Xte, ytr, yte = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y, test_size=0.2, random_state=RANDOM_STATE, stratify=y
     )
 
-    # 4) Pipeline TF-IDF + SVM
     pipe = Pipeline([
-        ("tfidf", TfidfVectorizer(
-            lowercase=True,
-            ngram_range=(1, 2),   # unigrama + bigrama
-            min_df=2,             # ignora termos muito raros
-            max_df=0.95           # ignora termos muito frequentes
-        )),
-        ("clf", LinearSVC())
+        ("tfidf", TfidfVectorizer(lowercase=True)),
+        ("clf", LogisticRegression(random_state=RANDOM_STATE, max_iter=1000))
     ])
 
-    # 5) Validação cruzada rápida (5-fold estratificada)
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scores = cross_val_score(pipe, X, y, cv=cv, scoring="f1_macro", n_jobs=-1)
-    print(f"CV 5-fold F1-macro: {scores.mean():.3f} ± {scores.std():.3f}")
+    parameters = {
+        'tfidf__ngram_range': [(1, 1), (1, 2)],
+        'tfidf__min_df': [2, 3, 5],
+        'clf__C': [0.1, 1, 10],
+        'clf__solver': ['liblinear'],
+    }
+    
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
-    # 6) Treina e avalia no hold-out
-    pipe.fit(Xtr, ytr)
-    ypred = pipe.predict(Xte)
-    print("\nRelatório (hold-out 20%):")
+    grid_search = GridSearchCV(pipe, parameters, cv=cv, scoring="f1_macro", n_jobs=-1, verbose=1)
+
+    print("Iniciando a busca por hiperparâmetros...")
+    grid_search.fit(Xtr, ytr)
+
+    print("\nMelhores parâmetros encontrados: ", grid_search.best_params_)
+    print(f"Melhor score F1-macro (validação cruzada): {grid_search.best_score_:.3f}")
+
+    print("\nRelatório (hold-out 20%) com o melhor modelo:")
+    best_model = grid_search.best_estimator_
+    ypred = best_model.predict(Xte)
     print(classification_report(yte, ypred, digits=3))
 
-    # 7) Salva o modelo
-    joblib.dump(pipe, args.out)
-    print(f"\n✅ Modelo salvo em: {args.out}")
+    joblib.dump(best_model, args.out)
+    print(f"\n✅ Melhor modelo salvo em: {args.out}")
+
 
 if __name__ == "__main__":
     main()
